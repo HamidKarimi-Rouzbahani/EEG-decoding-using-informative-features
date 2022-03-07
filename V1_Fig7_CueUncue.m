@@ -1,0 +1,332 @@
+%% 1=Features one by one
+clc;
+clear all;
+% close all;
+Datasets={'Mine','Vhab','Stfd'};
+Bands={'Broad','Delta','Theta','Alpha','Betta','Gamma'};
+band=1;
+Time=2;
+Feat_names={'Mean','Median','Variance','Skewness','Kurtosis','LZ Cmplx','Higuchi FD',...
+'Katz FD','Hurst Exp','Sample Ent','Apprx Ent','Autocorr','Hjorth Cmp','Hjorth Mob',...
+'Signal Pw','Mean Freq','Med Freq','Avg Freq','SEF 95%','Pw MedFrq','Phs MdFrq'};
+
+series=3;  % 1:3
+if series==1
+    array=1:5;
+    miny=-1.7;
+elseif series==2
+    array=6:14;
+    miny=-2.5;
+elseif series==3
+    array=15:21;
+    miny=-2.1;
+end
+    
+features=[2:8 9 11:13 18 19 20 27 21:26];    
+
+minx=-175;
+maxx=975;
+maxy=1;
+feat=[2:9 11:13 18:27];
+
+accuracies=nan*ones(21,53,8,10);
+for Subject=[1:10]
+    load(['Cortd_Dec_DS_Vhab_Cued_vs_Uncued_Band_Broad_Wind_slid_Subject_',num2str(Subject),'.mat'],'accuracy');    
+    accuracy(accuracy==0)=nan;
+    accuracies(:,:,1,Subject)=squeeze(nanmean(accuracy(feat,:,[1:4]),3));
+    accuracies(:,:,2,Subject)=squeeze(nanmean(accuracy(feat,:,[5:8]),3));
+    accuracies(:,:,3,Subject)=squeeze(nanmean(accuracy(feat,:,[9:12]),3));
+    accuracies(:,:,4,Subject)=squeeze(nanmean(accuracy(feat,:,[13:16]),3));
+
+    accuracies(:,:,5,Subject)=squeeze(nanmean(accuracy(feat,:,[1 5 9 13]),3));
+    accuracies(:,:,6,Subject)=squeeze(nanmean(accuracy(feat,:,[2 6 10 14]),3));
+    accuracies(:,:,7,Subject)=squeeze(nanmean(accuracy(feat,:,[3 7 11 15]),3));
+    accuracies(:,:,8,Subject)=squeeze(nanmean(accuracy(feat,:,[4 8 12 16]),3));
+
+    cued=1;
+    [Behavioural_accuracy_cued(:,Subject),Behavioural_RT_cued(:,Subject)]= DatasetLoading_DS2_behaviour(Subject,cued); % category, percentage
+    cued=0;
+    [Behavioural_accuracy_uncued(:,Subject),Behavioural_RT_uncued(:,Subject)]= DatasetLoading_DS2_behaviour(Subject,cued); % category, percentage
+end
+% Correlation across subjects
+Decoding_Acc_correlaation_all=nan*ones(53,21);
+for time=1:53
+    for feat=[1:21]
+        Decoding_Acc_correlaation_all(time,feat)=corr(nanmean(squeeze(nanmean(accuracies(feat,time,:,:),3)),2),nanmean([Behavioural_accuracy_cued;Behavioural_accuracy_uncued])','Type','Spearman');
+    end
+end
+%% Plotting
+figure;
+colors={[0 0.8 0.8],[0 0 0],[0.8 0 0],[0 0.8 0],[0.8 0 0.8],[0.8 0.8 0],[0 0 0.8],[0.5 0.5 0.5],[0.6 0.1 0.1]};
+times=[-200:25:1100]+25;
+
+p=0;
+for Feature=array
+    p=p+1;
+    plot_line(p)=plot(times,smooth(Decoding_Acc_correlaation_all(:,Feature),4),'Color',colors{p},'linewidth',3);
+    hold on;
+end
+
+line([minx maxx],[0 0],'LineWidth',1.5,'Color','k','LineStyle','--');
+line([0 0],[miny maxy],'LineWidth',1.5,'Color','k','LineStyle','--');
+%% Statistical analysis
+colors={[0 0.8 0.8],[0 0 0],[0.8 0 0],[0 0.8 0],[0.8 0 0.8],[0.8 0.8 0],[0 0 0.8],[0.5 0.5 0.5],[0.6 0.1 0.1]};
+times=[-200:25:1100]+25;
+
+% Decoding_Acc_correlaation_all_random=nan*ones(53,21,1000);
+% for iteration=1:1000
+%     for time=1:53
+%         for feat=[1:21]
+% %             Decoding_Acc_correlaation_all_random(time,feat,iteration)=corr(squeeze(nanmean(accuracies(feat,time,:,:),4)),randsample(nanmean([Behavioural_accuracy_cued;Behavioural_accuracy_uncued],2),10),'Type','Spearman');
+%             Decoding_Acc_correlaation_all_random(time,feat,iteration)=corr(nanmean(squeeze(nanmean(accuracies(feat,time,:,:),3)),2),randsample(nanmean([Behavioural_accuracy_cued;Behavioural_accuracy_uncued])',10),'Type','Spearman');
+%         end
+%     end
+% end
+% 
+% save('random_Acc_Behaav_correlations.mat','Decoding_Acc_correlaation_all_random')
+
+load('random_Acc_Behaav_correlations.mat','Decoding_Acc_correlaation_all_random');
+threshold=0.9;
+for feat=[1:21]
+    for time=1:53      
+        if Decoding_Acc_correlaation_all(time,feat)>=0 && sum(Decoding_Acc_correlaation_all(time,feat)>Decoding_Acc_correlaation_all_random(time,feat,:))>threshold*size(Decoding_Acc_correlaation_all_random,3)
+            significance(time,feat)=20;
+        elseif Decoding_Acc_correlaation_all(time,feat)<0 && sum(Decoding_Acc_correlaation_all(time,feat)<Decoding_Acc_correlaation_all_random(time,feat,:))>threshold*size(Decoding_Acc_correlaation_all_random,3)
+            significance(time,feat)=-20;
+        else
+            significance(time,feat)=0;
+        end
+    end
+end
+for Time=1:length(significance)
+    Effects=significance;
+    for e=1:size(Effects,2)
+        if Effects(Time,e)>0
+            Bayes(Time,e)=4.5;
+        elseif Effects(Time,e)<0
+            Bayes(Time,e)=-0.5;
+        elseif Effects(Time,e)==0
+            Bayes(Time,e)=2;
+        end
+    end
+end
+
+
+Baseline=-0.8;
+steps=0.02;
+distans=5; % times step
+f=0;
+Bayes=Bayes';
+for feature=array
+    f=f+1;
+    hold on;
+    for windoww=1:size(Bayes,2)
+        if Bayes(feature,windoww)==2
+            plots(f)=plot(times(windoww),Bayes(feature,windoww).*steps+Baseline-(f-1)*(3*2+distans)*steps,'LineStyle','none','marker','o','Color',colors{f},'linewidth',2,'markersize',5);
+        elseif Bayes(feature,windoww)==-0.5 || Bayes(feature,windoww)==4.5
+            plots(f)=plot(times(windoww),Bayes(feature,windoww).*steps+Baseline-(f-1)*(3*2+distans)*steps,'LineStyle','none','marker','o','MarkerFaceColor',colors{f},'Color',colors{f},'linewidth',2,'markersize',5);
+        end
+    end
+    baseline_temp=Baseline-(f-1)*(3*2+distans)*steps+0.04;
+    line([minx maxx],[baseline_temp baseline_temp]+1*steps,'linestyle','--','Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]-1*steps,'linestyle','--','Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]+3.5*steps,'Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]-3.5*steps,'Color','k','linewidth',1);
+end
+
+if series==1
+    
+    legend([plot_line(1),plot_line(2),plot_line(3),plot_line(4),plot_line(5)],...
+        {Feat_names{array(1)},Feat_names{array(2)},Feat_names{array(3)},Feat_names{array(4)},Feat_names{array(5)}},'EdgeColor','w','FontSize',16);
+
+elseif series==2
+    legend([plot_line(1),plot_line(2),plot_line(3),plot_line(4),plot_line(5),plot_line(6),plot_line(7),plot_line(8),plot_line(9)],...
+        {Feat_names{array(1)},Feat_names{array(2)},Feat_names{array(3)},Feat_names{array(4)},Feat_names{array(5)},Feat_names{array(6)},Feat_names{array(7)},Feat_names{array(8)},Feat_names{array(9)}},'EdgeColor','w','FontSize',10);
+
+elseif series==3
+     legend([plot_line(1),plot_line(2),plot_line(3),plot_line(4),plot_line(5),plot_line(6),plot_line(7)],...
+        {Feat_names{array(1)},Feat_names{array(2)},Feat_names{array(3)},Feat_names{array(4)},Feat_names{array(5)},Feat_names{array(6)},Feat_names{array(7)}},'EdgeColor','w','FontSize',12);   
+end
+ylim([miny maxy])
+
+ylabel(['Spearman''s Correlation to Behaviour (\rho)'])
+box off;
+
+xlabel('Time Relative to Stimulus Onset (ms)')
+box off;
+set(gca,'FontSize',18,'LineWidth',4,'XTick',...
+    [-100 0 100:100:900],'XTickLabel',...
+    {'-100','0','100','200','300','400','500','600','700','800','900'},'YTick',...
+    [-0.5 0 0.5 1],'YTickLabel',{'-0.5','0','0.5','1'},'XMinorTick','on');
+xlim([minx maxx])
+
+data=nanmean(Decoding_Acc_correlaation_all(35:end,:));
+save('Mean_decoding_behav_cue_vs_uncue_correlation_each_feature.mat','data');
+ccc
+
+%% Feature combinations
+
+clc;
+clear all;
+% close all;
+Datasets={'Mine','Vhab','Stfd'};
+Bands={'Broad','Delta','Theta','Alpha','Betta','Gamma'};
+band=1;
+Dataset=2;
+
+series=2;  % 1:3
+if series==1
+    array=1:6;
+    miny=-1.9;
+elseif series==2
+    array=[7:12];
+    miny=-1.9;
+elseif series==3
+    array=13:17;
+    miny=-1.7;
+end
+    
+features=[1:9 12:19];    
+
+minx=-175;
+maxx=975;
+maxy=1;
+
+
+accuracies_cued=nan*ones(4,53,19,10);
+Feat_Select_all=nan*ones(53,21,10);
+listFS = {'ILFS','InfFS','ECFS','mrmr','relieff','mutinffs','fsv','laplacian','mcfs','fisher','UDFS','llcfs','cfs','fsasl','dgufs','ufsol','lasso'};
+cued=1;
+f=0;
+for feat=features
+    f=f+1;
+    selection_method=listFS{f};
+    for Subject=[1:10]
+        load(['Corrected_Dec_DS_',Datasets{Dataset},'_Cued_',num2str(cued),'_Band_',Bands{band},'_Wind_slid_Subject_',num2str(Subject),'_CombFeat_',selection_method,'_PCA.mat'],'accuracy');
+        % interpolation
+        for cl=1:6
+            accuracy_IP(1,cl,:)=interp1([-175:20:865],squeeze(accuracy(1,cl,:)),[-200:5:950]+25,'spline');            
+            accuracy_IP(1,cl,211:end)=randsample(squeeze(accuracy(1,cl,:)),21);
+        end     
+        %
+        accuracy=accuracy_IP;
+        accuracies_cued(1,:,feat,Subject)=squeeze(nanmean(accuracy(1,[1 2 3],:),2));
+        accuracies_cued(2,:,feat,Subject)=squeeze(nanmean(accuracy(1,[1 4 5],:),2));
+        accuracies_cued(3,:,feat,Subject)=squeeze(nanmean(accuracy(1,[2 4 6],:),2));
+        accuracies_cued(4,:,feat,Subject)=squeeze(nanmean(accuracy(1,[3 5 6],:),2));        
+        [~,Behavioural_RT_cued(:,Subject)]= DatasetLoading_DS2_behaviour(Subject,cued); % category, percentage
+    end
+end
+
+times=[-200:5:950]+25;
+% Correlation across subjects
+Decoding_Acc_correlaation_all=nan*ones(53,19);
+for time=1:length(times)
+    f=0;
+    for feat=features
+        f=f+1;
+        Decoding_Acc_correlaation_all(time,f)=corr(nanmean(squeeze(nanmean(accuracies_cued(:,time,feat,:),1)),2),nanmean(Behavioural_RT_cued)','Type','Spearman');
+    end
+end
+
+figure;
+colors={[0 0.8 0.8],[0 0 0],[0.8 0 0],[0 0.8 0],[0.8 0 0.8],[0.8 0.8 0],[0 0 0.8],[0.5 0.5 0.5],[0.6 0.1 0.1]};
+p=0;
+for Feature=array
+    p=p+1;
+    plot_line(p)=plot(times,smooth(Decoding_Acc_correlaation_all(:,Feature),20),'Color',colors{p},'linewidth',3);
+    hold on;
+end
+
+line([minx maxx],[0 0],'LineWidth',1.5,'Color','k','LineStyle','--');
+line([0 0],[miny maxy],'LineWidth',1.5,'Color','k','LineStyle','--');
+
+% Statistical analysis
+% Decoding_Acc_correlaation_all_random=nan*ones(53,17,1000);
+% for iteration=1:1000
+%     for time=1:53
+%         p=0;
+%         for feat=features
+%             p=p+1;
+%             Decoding_Acc_correlaation_all_random(time,p,iteration)=corr(nanmean(squeeze(nanmean(accuracies_cued(:,time,feat,:),1)),2),randsample(nanmean(Behavioural_RT_cued),10)','Type','Spearman');
+%         end
+%     end
+% end
+% save('random_RT_Behaav_correlations_feat_combin_5ms.mat','Decoding_Acc_correlaation_all_random')
+
+
+load('random_RT_Behaav_correlations_feat_combin_5ms.mat','Decoding_Acc_correlaation_all_random');
+threshold=0.9;
+for feat=1:17
+    for time=1:53      
+        if Decoding_Acc_correlaation_all(time,feat)>=0 && sum(Decoding_Acc_correlaation_all(time,feat)>Decoding_Acc_correlaation_all_random(time,feat,:))>threshold*size(Decoding_Acc_correlaation_all_random,3)
+            significance(time,feat)=20;
+        elseif Decoding_Acc_correlaation_all(time,feat)<0 && sum(Decoding_Acc_correlaation_all(time,feat)<Decoding_Acc_correlaation_all_random(time,feat,:))>threshold*size(Decoding_Acc_correlaation_all_random,3)
+            significance(time,feat)=-20;
+        else
+            significance(time,feat)=0;
+        end
+    end
+end
+for Time=1:length(significance)
+    Effects=significance;
+    for e=1:17
+        if Effects(Time,e)>0
+            Bayes(Time,e)=4.5;
+        elseif Effects(Time,e)<0
+            Bayes(Time,e)=-0.5;
+        elseif Effects(Time,e)==0
+            Bayes(Time,e)=2;
+        end
+    end
+end
+
+
+Baseline=-0.8;
+steps=0.02;
+distans=4; % times step
+f=0;
+Bayes=Bayes';
+for feature=array
+    f=f+1;
+    hold on;
+    for windoww=1:size(Bayes,2)
+        if Bayes(feature,windoww)==2
+            plots(f)=plot(times(windoww),Bayes(feature,windoww).*steps+Baseline-(f-1)*(3*2+distans)*steps,'LineStyle','none','marker','o','Color',colors{f},'linewidth',2,'markersize',5);
+        elseif Bayes(feature,windoww)==-0.5 || Bayes(feature,windoww)==4.5
+            plots(f)=plot(times(windoww),Bayes(feature,windoww).*steps+Baseline-(f-1)*(3*2+distans)*steps,'LineStyle','none','marker','o','MarkerFaceColor',colors{f},'Color',colors{f},'linewidth',2,'markersize',5);
+        end
+    end
+    baseline_temp=Baseline-(f-1)*(3*2+distans)*steps+0.04;
+    line([minx maxx],[baseline_temp baseline_temp]+1*steps,'linestyle','--','Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]-1*steps,'linestyle','--','Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]+3.5*steps,'Color','k','linewidth',1);
+    line([minx maxx],[baseline_temp baseline_temp]-3.5*steps,'Color','k','linewidth',1);
+end
+
+if series==1 || series==2
+    legend([plot_line(1),plot_line(2),plot_line(3),plot_line(4),plot_line(5),plot_line(6)],...
+        {listFS{array(1)},listFS{array(2)},listFS{array(3)},listFS{array(4)},listFS{array(5)},listFS{array(6)}},'EdgeColor','w','FontSize',14);
+
+elseif series==3
+     legend([plot_line(1),plot_line(2),plot_line(3),plot_line(4),plot_line(5)],...
+        {listFS{array(1)},listFS{array(2)},listFS{array(3)},listFS{array(4)},listFS{array(5)}},'EdgeColor','w','FontSize',14);   
+end
+ylim([miny maxy])
+
+ylabel(['Spearman''s Correlation to Behaviour (\rho)'])
+box off;
+
+xlabel('Time Relative to Stimulus Onset (ms)')
+box off;
+set(gca,'FontSize',18,'LineWidth',4,'XTick',...
+    [-100 0 100:100:900],'XTickLabel',...
+    {'-100','0','100','200','300','400','500','600','700','800','900'},'YTick',...
+    [-0.5 0 0.5 1],'YTickLabel',{'-0.5','0','0.5','1'},'XMinorTick','on');
+xlim([minx maxx])
+
+
+% ccc
+data=nanmean(Decoding_Acc_correlaation_all(35:end,:));
+save('Mean_decoding_behav_feat_combned_correlation_each_feature.mat','data');
+
