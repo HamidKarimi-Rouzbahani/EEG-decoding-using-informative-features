@@ -33,7 +33,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
     for Subject=Subjects
         signal = DatasetLoadingV2(Dataset,Subject); % channel, time, cat, trial
         
-        accuracy = nan*ones(37,nchoosek(size(signal,3),2),length(Windows)); 
+        accuracy = nan*ones(37,nchoosek(size(signal,3),2),length(Windows));
         deltas = nan*ones(37,nchoosek(size(signal,3),2),length(Windows),128); % classifier weights for presentations
         for windoww=Windows
             
@@ -44,11 +44,12 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
             
             
             for feature=[2:9 11:13 18:30 32 34:37] % features
-                
                 if feature==33 % Convolutional neural networks were not used in this study
                     net= load ('imagenet-caffe-alex.mat');
                 end
+                search_light=1:size(signal,1);
                 for channel = 1:size(signal,1)
+                    search_light(search_light==channel)=[];
                     for category = 1:size(signal,3)
                         for trial = 1:size(signal,4)
                             
@@ -376,7 +377,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                 % window
                 if size(X,2)>size(signal,1)
                     coeff = pca(X);
-                    Xtt= X*coeff(:,1:size(signal,1));                   
+                    X= X*coeff(:,1:size(signal,1));
                 end
                 
                 clearvars -except Xtt Windows Subjects bands lowband highband band windows windoww wind Dataset Fs True_Predicted_labels accuracy Subject signal feature X Y  net
@@ -390,7 +391,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                             if Y(counter)==classes
                                 c=c+1;
                                 YY(c)=Y(counter);
-                                XX(c,:)=Xtt(counter,:);
+                                XX(c,:)=X(counter,:);
                             end
                         end
                     end
@@ -408,7 +409,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                     [band Subject windoww feature combination]
                 end
                 Datasets={'Dataset1','Dataset2','Dataset3'};
-                Bands={'Broad','Delta','Theta','Alpha','Betta','Gamma'};
+                Bands={'Broad','Delta','Theta','Alpha','Beta','Gamma'};
             end
         end
         save(['Corrected_Dec_DS_',Datasets{Dataset},'_Band_',Bands{band},'_Wind_sliding_Subject_',num2str(Subject),'mult.mat'],'accuracy','deltas');

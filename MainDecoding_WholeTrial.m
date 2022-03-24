@@ -4,8 +4,8 @@ clear all;
 Dataset=1; % 1:3
 
 Subjects=[1:10];% There are 10 subjects per dataset
-bands=[1:6]; % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
-Windows=[1];% Number of decoding analyses performed in the trial considering the step size: 1=whole trial
+bands=[1]; % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
+Windows=[1:8];% Number of decoding analyses performed in the trial considering the step size: 1=whole trial
 Fs=1000; % Sampling frequency of the data
 
 
@@ -47,12 +47,14 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
             wind=windows{windoww};
             
             accuracy = nan*ones(37,nchoosek(size(signal,3),2),10);
-            for feature=[1:9 11:20 27:30 32 34:37] % features
+            for feature=[2:9 11:20 27:30 32 34:37] % features
                 
                 if feature==33 % Convolutional neural networks were not used in this study
                     net= load ('imagenet-caffe-alex.mat');
                 end
+                search_light=1:size(signal,1);
                 for channel = 1:size(signal,1)
+                    search_light(search_light==channel)=[];
                     for category = 1:size(signal,3)
                         for trial = 1:size(signal,4)
                             
@@ -351,7 +353,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                                         delta_phase=Hilb1-Hilb2;
                                         PPC(ch2,1)=abs(mean(exp(1j*delta_phase)));
                                     end
-                                    feature_chosen(channel,category,trial,:)=PPC;                                
+                                    feature_chosen(channel,category,trial,:)=PPC;
                                 end
                             end
                         end
@@ -372,16 +374,13 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                 end
                 X=Xt';
                 Y=Y';
-                % applying PCA to reduce the dimension of the multi-valued
-                % features to 1 per electrode and trial and analysis time
-                % window
-                if size(X,2)>size(signal,1)
-                    coeff = pca(X);
-                    Xtt= X*coeff(:,1:size(signal,1));                   
-                end
                 
-                clearvars -except Xtt Windows Subjects bands lowband highband band windows windoww wind Dataset Fs True_Predicted_labels accuracy Subject signal feature X Y  net
-                % decoding using 10-fold cross-validation                
+                if size(X,2)>size(signal,1)
+                    coeff = pca(X');
+                    X=coeff(:,1:size(signal,1));
+                end
+                clearvars -except Windows Subjects bands lowband highband band windows windoww wind Dataset Fs True_Predicted_labels accuracy Subject signal feature X Y  net
+                
                 folds=10;
                 combinations=nchoosek(unique(Y),2);
                 for combination=1:size(combinations,1)
@@ -391,7 +390,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                             if Y(counter)==classes
                                 c=c+1;
                                 YY(c)=Y(counter);
-                                XX(c,:)=Xtt(counter,:);
+                                XX(c,:)=X(counter,:);
                             end
                         end
                     end
@@ -399,6 +398,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                     Yready=YY;
                     
                     clearvars YY XX
+                    
                     Classifier_Model = fitcdiscr(Xready,Yready,'DiscrimType','pseudoLinear');
                     cvmodel = crossval(Classifier_Model);
                     L = kfoldLoss(cvmodel);
@@ -407,7 +407,7 @@ for band=bands   % 1=broad, 2=delta, 3=theta, 4=alpha, 5=beta, 6=gamma
                     [band Subject windoww feature combination]
                 end
                 Datasets={'Dataset1','Dataset2','Dataset3'};
-                Bands={'Broad','Delta','Theta','Alpha','Betta','Gamma'};
+                Bands={'Broad','Delta','Theta','Alpha','Beta','Gamma'};
                 save(['Corrected_Dec_DS_',Datasets{Dataset},'_Band_',Bands{band},'_Wind_',num2str(windoww),'_Subject_',num2str(Subject),'.mat'],'accuracy');
             end
         end
